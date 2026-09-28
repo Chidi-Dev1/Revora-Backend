@@ -65,6 +65,9 @@ transactions (lines 77 / 97).
 - Lint (`npx eslint` on `refreshService.ts` + `refreshService.test.ts`) — **clean**
 - Known unrelated failure: `src/auth/register/__tests__/roundtrip.test.ts`
   (error-message wording) — pre-existing on `master`, untouched by this branch
+- Contract checks (`npm run pact:verify`) — **13/13 passed**
 - PR-description edits via `gh pr edit 1194` return `GraphQL: Resource not
-  accessible by integration (updatePullRequest)`; this document is the
-  canonical record for review.
+  accessible by integration (updatePullRequest)`; PR comments likewise fail
+  with `addComment` 403, so the token's PR write surface is read-only and
+  this document is the canonical record for review. The exercised-case table
+  above is ready to paste into the PR description by a maintainer.
