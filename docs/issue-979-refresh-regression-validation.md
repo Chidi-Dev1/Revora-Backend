@@ -4,6 +4,8 @@
 > description on the upstream repository (403). Reviewers: this documents the
 > exercised cases and results for the regression coverage added to
 > `src/auth/refresh/refreshService.test.ts`.
+>
+> Review location: PR #1194 (`feature/backend-011-rate-limiter-tier-policies` → `master`).
 
 ## Scope
 
@@ -48,3 +50,21 @@ transactions (lines 77 / 97).
   silent swallow) fails the suite.
 - No wall-clock dependence: expiry boundaries use fixed `Date` values
   (`NOW_FUTURE` / `NOW_PAST`); concurrency uses explicit promise gates.
+
+## Re-validation (2026-09-28, branch tip `b5c2a558`)
+
+- Focused file rerun — **20/20 passed** (`npx jest
+  src/auth/refresh/refreshService.test.ts --runInBand`)
+- Surrounding suite rerun — **33/33 passed** (`npx jest src/auth/refresh --runInBand`,
+  4 suites)
+- Coverage rerun with the ≥95% gate enforced on `refreshService.ts` — **100%
+  statements / branches / functions / lines**, threshold met
+- Typecheck (`npx tsc --noEmit`) — **0 errors in `src/auth/refresh/**`**;
+  247 pre-existing errors elsewhere in the repo (unrelated modules, see the
+  `isolatedModules` / `diagnostics.warnOnly` note in `jest.config.js`)
+- Lint (`npx eslint` on `refreshService.ts` + `refreshService.test.ts`) — **clean**
+- Known unrelated failure: `src/auth/register/__tests__/roundtrip.test.ts`
+  (error-message wording) — pre-existing on `master`, untouched by this branch
+- PR-description edits via `gh pr edit 1194` return `GraphQL: Resource not
+  accessible by integration (updatePullRequest)`; this document is the
+  canonical record for review.
