@@ -464,4 +464,91 @@ describe('RefreshService', () => {
         const retryResult = await service.refresh('refresh-session-0');
         expect(retryResult).toBeNull();
     });
+
+    // ── Regression: missing branch coverage ─────────────────────────────────
+
+    /**
+     * Regression for the `.catch` error handler at line ~193.
+     * When `withTransaction` rejects with a non-Error value (e.g. a plain
+     * string or object), the handler must fall through to `String(error)` so
+     * it never throws a TypeError from `.message` access.
+     * The error must be re-thrown unchanged; the in-flight lock must be cleared.
+     */
+    it('rethrows non-Error rejection from transaction and clears in-flight lock', async () => {
+        const repo = createMockRepo();
+        const tokenService = createMockTokenService();
+        const service = new RefreshService(repo, tokenService, mockDb, logger as any);
+
+        tokenService.verifyRefreshToken.mockReturnValue({ userId: USER_ID, sessionId: 'session-0', role: ROLE });
+        // Reject with a plain string — not an Error instance — to exercise the
+        // `String(error)` branch in the catch handler (line ~193).
+        repo.findSessionByIdForUpdate.mockRejectedValue('plain-string-error');
+
+        await expect(service.refresh('refresh-session-0')).rejects.toBe('plain-string-error');
+
+        // The error message logged must be the string-coerced value, not a crash.
+        expect(logger.error).toHaveBeenCalledWith(
+            'Refresh transaction failed',
+            expect.objectContaining({
+                error: 'plain-string-error',
+            }),
+        );
+
+        // In-flight lock must be released so the same session can be retried.
+        repo.findSessionByIdForUpdate.mockResolvedValue(null);
+        const retryResult = await service.refresh('refresh-session-0');
+        expect(retryResult).toBeNull();
+    });
+
+    /**
+     * Regression for the `String(error)` branch in the token-verification
+     * catch block (line ~65).
+     * When `verifyRefreshToken` throws a non-Error value (e.g. a plain string),
+     * the logger must receive the string-coerced representation and the method
+     * must return null without crashing.
+     */
+    it('returns null and logs string-coerced message when verifyRefreshToken throws a non-Error value', async () => {
+        const repo = createMockRepo();
+        const tokenService = createMockTokenService();
+        const service = new RefreshService(repo, tokenService, mockDb, logger as any);
+
+        // Throw a plain string (not an Error instance) to exercise String(error).
+        tokenService.verifyRefreshToken.mockImplementation(() => {
+            // eslint-disable-next-line @typescript-eslint/no-throw-literal
+            throw 'non-error-string-rejection';
+        });
+
+        const result = await service.refresh('any-token');
+
+        expect(result).toBeNull();
+        expect(logger.warn).toHaveBeenCalledWith(
+            'Refresh token verification failed',
+            expect.objectContaining({
+                error: 'non-error-string-rejection',
+            }),
+        );
+        expect(mockWithTransaction).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Regression for the default-logger constructor branch (lines ~50-65).
+     * When `RefreshService` is instantiated without an explicit logger, it
+     * creates its own `new Logger()`. The service must still function correctly —
+     * this exercises the default-parameter branch that all other tests skip by
+     * always injecting a mock logger.
+     */
+    it('works correctly when instantiated without an explicit logger (default Logger branch)', async () => {
+        const repo = createMockRepo();
+        const tokenService = createMockTokenService();
+        // No fourth argument → default Logger() is constructed internally.
+        const service = new RefreshService(repo, tokenService, mockDb);
+
+        tokenService.verifyRefreshToken.mockImplementation(() => {
+            throw new Error('invalid signature');
+        });
+
+        // Must return null and must not throw, even with the real Logger.
+        const result = await service.refresh('any-token');
+        expect(result).toBeNull();
+    });
 });
